@@ -30,6 +30,16 @@ jobs:
         shell: pwsh
         run: cargo install tauri-cli --version "^2"
 
+      - name: Ensure Windows icon exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "src-tauri/icons/icon.ico")) {
+            if (-not (Test-Path "src-tauri/icons/icon.png")) {
+              throw "Missing src-tauri/icons/icon.png, cannot generate icon.ico"
+            }
+            cargo tauri icon "src-tauri/icons/icon.png"
+          }
+
       - name: Build Windows bundles
         working-directory: src-tauri
         shell: pwsh
