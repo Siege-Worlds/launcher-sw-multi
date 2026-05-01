@@ -7,3 +7,8 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Code signing secrets
+src-tauri/certs/*.pfx
+src-tauri/certs/*.p12
+signing.env
