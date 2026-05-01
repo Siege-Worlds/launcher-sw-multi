@@ -34,10 +34,7 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path "src-tauri/icons/icon.ico")) {
-            if (-not (Test-Path "src-tauri/icons/icon.png")) {
-              throw "Missing src-tauri/icons/icon.png, cannot generate icon.ico"
-            }
-            cargo tauri icon "src-tauri/icons/icon.png"
+            Copy-Item "img/SW v5 Logo red 256px.ico" "src-tauri/icons/icon.ico"
           }
 
       - name: Build Windows bundles
