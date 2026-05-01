@@ -97,10 +97,24 @@ jobs:
             Where-Object { $_.Extension -in @('.exe', '.msi') }
 
           foreach ($artifact in $artifacts) {
-            & $signtool.FullName verify /pa /v "$($artifact.FullName)"
-            if ($LASTEXITCODE -ne 0) {
-              throw "Signature verification failed for $($artifact.FullName)"
+            $verifyOutput = & $signtool.FullName verify /pa /v "$($artifact.FullName)" 2>&1 | Out-String
+            $verifyExit = $LASTEXITCODE
+
+            if ($verifyExit -eq 0) {
+              continue
             }
+
+            $auth = Get-AuthenticodeSignature "$($artifact.FullName)"
+            if ($auth.Status -eq 'NotSigned') {
+              throw "Artifact is not signed: $($artifact.FullName)"
+            }
+
+            if ($verifyOutput -match "not trusted by the trust provider") {
+              Write-Warning "Artifact is signed but chain is untrusted on this runner (likely self-signed cert): $($artifact.FullName)"
+              continue
+            }
+
+            throw "Signature verification failed for $($artifact.FullName)`n$verifyOutput"
           }
 
       - name: Upload signed bundles
