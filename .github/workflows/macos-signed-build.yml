@@ -1,0 +1,81 @@
+name: macOS Signed Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-signed-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preflight secrets check
+        run: |
+          if [ -z "${{ secrets.APPLE_CERTIFICATE }}" ]; then
+            echo "Secret APPLE_CERTIFICATE is not set." && exit 1
+          fi
+          if [ -z "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" ]; then
+            echo "Secret APPLE_CERTIFICATE_PASSWORD is not set." && exit 1
+          fi
+          if [ -z "${{ secrets.APPLE_ID }}" ]; then
+            echo "Secret APPLE_ID is not set." && exit 1
+          fi
+          if [ -z "${{ secrets.APPLE_PASSWORD }}" ]; then
+            echo "Secret APPLE_PASSWORD is not set." && exit 1
+          fi
+          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ]; then
+            echo "Secret APPLE_TEAM_ID is not set." && exit 1
+          fi
+          if [ -z "${{ secrets.APPLE_SIGNING_IDENTITY }}" ]; then
+            echo "Secret APPLE_SIGNING_IDENTITY is not set." && exit 1
+          fi
+
+      - name: Import Apple certificate into keychain
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "temp-keychain-password" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "temp-keychain-password" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple: -s -k "temp-keychain-password" "$KEYCHAIN_PATH"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2"
+
+      - name: Build macOS bundles
+        working-directory: src-tauri
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: cargo tauri build --bundles dmg,app
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain" || true
+
+      - name: Upload signed bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-macos-bundles
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
