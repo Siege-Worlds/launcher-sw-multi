@@ -58,6 +58,12 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2"
 
+      - name: Ensure Windows icon exists
+        run: |
+          if [ ! -f "src-tauri/icons/icon.ico" ]; then
+            cp "img/SW v5 Logo red 256px.ico" "src-tauri/icons/icon.ico"
+          fi
+
       - name: Build macOS bundles
         working-directory: src-tauri
         env:
